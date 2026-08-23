@@ -151,8 +151,8 @@ def create_task(task_in: TaskCreate):
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO tasks (title, done) VALUES (?, 0);",
-            (task_in.title.strip(),)
+            "INSERT INTO tasks (title, done) VALUES (?, ?);",
+            (task_in.title.strip(), 0)
         )
         new_id = cursor.lastrowid
         conn.commit()
