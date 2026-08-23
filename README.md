@@ -106,6 +106,55 @@ content-type: application/json
 {"status":"ok"}
 ```
 
+### Retrieve All Tasks (`GET /tasks`)
+
+#### Command:
+```bash
+curl -i http://127.0.0.1:8000/tasks
+```
+
+#### Expected Output:
+```http
+HTTP/1.1 200 OK
+content-type: application/json
+
+[
+  {"id":1,"title":"Buy groceries","description":"Buy milk, eggs, bread, and fruits","completed":false},
+  {"id":2,"title":"Clean the house","description":"Vacuum the living room and dust the shelves","completed":true},
+  {"id":3,"title":"Learn FastAPI","description":"Practice building APIs and writing tests","completed":false}
+]
+```
+
+### Retrieve a Single Task (`GET /tasks/{id}`)
+
+#### Command:
+```bash
+curl -i http://127.0.0.1:8000/tasks/1
+```
+
+#### Expected Output:
+```http
+HTTP/1.1 200 OK
+content-type: application/json
+
+{"id":1,"title":"Buy groceries","description":"Buy milk, eggs, bread, and fruits","completed":false}
+```
+
+### Task Not Found (`GET /tasks/{id}` with Unknown ID)
+
+#### Command:
+```bash
+curl -i http://127.0.0.1:8000/tasks/999
+```
+
+#### Expected Output:
+```http
+HTTP/1.1 404 Not Found
+content-type: application/json
+
+{"error":"Task with ID 999 not found"}
+```
+
 ### Create a Task (`POST /tasks`)
 
 #### Command:
