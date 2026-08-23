@@ -81,3 +81,15 @@ The server will start at: **http://127.0.0.1:8000**
 ```text
 [INSERT SCREENSHOT PLACEHOLDER HERE]
 ```
+## Testing Checklist
+
+The API was tested using FastAPI Swagger UI at `/docs`.
+
+- User signup returns `201 Created`
+- User login returns `200 OK` with access and refresh tokens
+- Public endpoint works without authentication
+- Protected endpoints return `401 Unauthorized` without a Bearer token
+- Protected endpoints work with a valid Supabase access token
+- Invalid or expired tokens return `401 Unauthorized`
+- Logout successfully returns `204 No Content`
+- Swagger UI provides Bearer authentication through the **Authorize** button
