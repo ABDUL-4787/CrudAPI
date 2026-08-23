@@ -1,204 +1,155 @@
-from fastapi import FastAPI, Request, status, Response
-from fastapi.exceptions import RequestValidationError
+from fastapi import FastAPI, Request, Depends, HTTPException, status, Response
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List
-import psycopg2
-from psycopg2.extras import RealDictCursor
+from fastapi.exceptions import RequestValidationError
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security.utils import get_authorization_scheme_param
+from pydantic import BaseModel
+from typing import Optional
 import os
 from dotenv import load_dotenv
+from supabase import create_client, Client
 
-# Load env variables from .env if it exists
+# Load environment variables
 load_dotenv()
 
-# Build database connection URL
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    db_user = os.getenv("DB_USER", "postgres")
-    db_password = os.getenv("DB_PASSWORD", "postgres")
-    db_name = os.getenv("DB_NAME", "todo_db")
-    db_host = os.getenv("DB_HOST", "localhost")
-    db_port = os.getenv("DB_PORT", "5432")
-    DATABASE_URL = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+# Initialize Supabase client (gracefully handle placeholder credentials to prevent app startup crashes)
+if not SUPABASE_URL or not SUPABASE_KEY or "your-project-id" in SUPABASE_URL:
+    print("Warning: Valid Supabase URL or Key not set. Authentication routes will fail.")
+    supabase: Client = create_client("https://placeholder.supabase.co", "placeholder-key")
+else:
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI(
-    title="To-Do CRUD API",
-    description="A complete, minimal PostgreSQL-backed CRUD To-Do API built with FastAPI.",
-    version="3.0.0"
+    title="Supabase Auth API Backend",
+    description="FastAPI project implementing Supabase registration, login, logout, and protected routes.",
+    version="1.0.0"
 )
 
-# Helper function to get database connection
-def get_db():
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
-    return conn
+# Custom Exception for Auth Errors to bypass default FastAPI detail nesting
+class AuthException(Exception):
+    def __init__(self, status_code: int, error_message: str):
+        self.status_code = status_code
+        self.error_message = error_message
 
-# Database Initialization
-def init_db():
-    try:
-        with get_db() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS tasks (
-                        id SERIAL PRIMARY KEY,
-                        title VARCHAR(255) NOT NULL,
-                        done BOOLEAN NOT NULL DEFAULT FALSE
-                    );
-                """)
-                
-                # Check if empty
-                cursor.execute("SELECT COUNT(*) AS cnt FROM tasks;")
-                row = cursor.fetchone()
-                if row and row["cnt"] == 0:
-                    cursor.execute("INSERT INTO tasks (title, done) VALUES ('Buy groceries', FALSE);")
-                    cursor.execute("INSERT INTO tasks (title, done) VALUES ('Clean the house', TRUE);")
-                    cursor.execute("INSERT INTO tasks (title, done) VALUES ('Learn FastAPI', FALSE);")
-                conn.commit()
-    except Exception as e:
-        print(f"Warning: Local database connection/initialization skipped or failed: {e}")
+@app.exception_handler(AuthException)
+async def auth_exception_handler(request: Request, exc: AuthException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": exc.error_message}
+    )
 
-# Initialize database on load (primarily for local execution)
-init_db()
-
-# Helper to convert Row dict
-def row_to_task(row) -> dict:
-    return {
-        "id": row["id"],
-        "title": row["title"],
-        "done": bool(row["done"])
-    }
-
-# Pydantic Models
-class TaskCreate(BaseModel):
-    title: str = Field(..., description="The title of the task (required, non-empty)")
-
-    @field_validator("title")
-    @classmethod
-    def validate_title(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError("Title must not be empty or whitespace-only.")
-        return v
-
-class TaskUpdate(BaseModel):
-    title: str = Field(..., description="The title of the task (required, non-empty)")
-    done: bool = Field(..., description="Completion status of the task")
-
-    @field_validator("title")
-    @classmethod
-    def validate_title(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError("Title must not be empty or whitespace-only.")
-        return v
-
-class TaskResponse(BaseModel):
-    id: int
-    title: str
-    done: bool
-
-# Custom Exception Handler to return HTTP 400 for validation errors
+# Request validation override to return 400 Bad Request instead of 422 on payload errors
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    errors = exc.errors()
-    
-    # Check if there is an error specifically related to the field "title"
-    title_err = None
-    for err in errors:
-        if "title" in err.get("loc", []):
-            title_err = err
-            break
-
-    if title_err:
-        err_type = title_err.get("type")
-        if err_type == "missing":
-            msg = "Title is required."
-        else:
-            msg = title_err.get("msg", "Title is invalid.")
-            # Strip Pydantic's default "Value error, " prefix
-            if msg.startswith("Value error, "):
-                msg = msg[len("Value error, "):]
-        return JSONResponse(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            content={"error": msg}
-        )
-
-    # Generic validation error message for other fields or payloads
-    first_err = errors[0] if errors else {}
-    msg = first_err.get("msg", "Validation error")
-    loc = first_err.get("loc", ["field"])
-    field = loc[-1] if loc else "field"
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
-        content={"error": f"Invalid value for '{field}': {msg}"}
+        content={"error": "Missing or invalid fields"}
     )
 
-# Routes
-@app.get("/", status_code=status.HTTP_200_OK)
-def read_root():
-    return {"message": "Welcome to the To-Do CRUD API!"}
+# Pydantic Schemas
+class AuthPayload(BaseModel):
+    email: Optional[str] = None
+    password: Optional[str] = None
 
-@app.get("/health", status_code=status.HTTP_200_OK)
-def health_check():
-    return {"status": "ok"}
+# Declare Bearer Authentication Scheme for Swagger UI Authorize lock option
+security_scheme = HTTPBearer(auto_error=False)
 
-@app.get("/tasks", response_model=List[TaskResponse], status_code=status.HTTP_200_OK)
-def get_tasks():
-    with get_db() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT id, title, done FROM tasks ORDER BY id ASC;")
-            rows = cursor.fetchall()
-            return [row_to_task(row) for row in rows]
+# Reusable Authentication Dependency
+def get_current_user(request: Request, credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme)) -> dict:
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        raise AuthException(status_code=401, error_message="Access token required")
+    
+    scheme, token = get_authorization_scheme_param(auth_header)
+    if scheme.lower() != "bearer" or not token:
+        raise AuthException(status_code=401, error_message="Access token required")
+        
+    try:
+        # Verify access token directly against Supabase Auth server
+        user_response = supabase.auth.get_user(token)
+        if not user_response or not user_response.user:
+            raise Exception("Invalid token user")
+        
+        # Save token in request state for use in logout endpoint
+        request.state.token = token
+        return user_response.user
+    except Exception:
+        raise AuthException(status_code=401, error_message="Invalid or expired token")
 
-@app.get("/tasks/{task_id}", response_model=TaskResponse)
-def get_task(task_id: int):
-    with get_db() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT id, title, done FROM tasks WHERE id = %s;", (task_id,))
-            row = cursor.fetchone()
-            if row:
-                return row_to_task(row)
-    return JSONResponse(
-        status_code=status.HTTP_404_NOT_FOUND,
-        content={"error": f"Task with ID {task_id} not found"}
-    )
+# Public Endpoints
+@app.get("/", status_code=200)
+def welcome():
+    return {"message": "Welcome to the Supabase Auth API!"}
 
-@app.post("/tasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
-def create_task(task_in: TaskCreate):
-    with get_db() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "INSERT INTO tasks (title, done) VALUES (%s, %s) RETURNING id, title, done;",
-                (task_in.title.strip(), False)
-            )
-            row = cursor.fetchone()
-            conn.commit()
-            return row_to_task(row)
+@app.get("/public/info", status_code=200)
+def public_info():
+    return {"message": "Welcome stranger! This info is public."}
 
-@app.put("/tasks/{task_id}", response_model=TaskResponse)
-def update_task(task_id: int, task_in: TaskUpdate):
-    with get_db() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "UPDATE tasks SET title = %s, done = %s WHERE id = %s RETURNING id, title, done;",
-                (task_in.title.strip(), task_in.done, task_id)
-            )
-            row = cursor.fetchone()
-            if row:
-                conn.commit()
-                return row_to_task(row)
-    return JSONResponse(
-        status_code=status.HTTP_404_NOT_FOUND,
-        content={"error": f"Task with ID {task_id} not found"}
-    )
+# Authentication Endpoints
+@app.post("/auth/signup", status_code=201)
+def signup(payload: AuthPayload):
+    if not payload.email or not payload.password:
+        raise AuthException(status_code=400, error_message="Missing email or password")
+    
+    try:
+        response = supabase.auth.sign_up({"email": payload.email, "password": payload.password})
+        if not response or not response.user:
+            raise Exception("Registration failed")
+        
+        user = response.user
+        return {
+            "id": user.id,
+            "email": user.email,
+            "created_at": user.created_at
+        }
+    except Exception as e:
+        # Extract friendly message from Exception
+        error_msg = str(e)
+        raise AuthException(status_code=400, error_message=error_msg)
 
-@app.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_task(task_id: int):
-    with get_db() as conn:
-        with conn.cursor() as cursor:
-            cursor.execute("DELETE FROM tasks WHERE id = %s RETURNING id;", (task_id,))
-            row = cursor.fetchone()
-            if row:
-                conn.commit()
-                return Response(status_code=status.HTTP_204_NO_CONTENT)
-    return JSONResponse(
-        status_code=status.HTTP_404_NOT_FOUND,
-        content={"error": f"Task with ID {task_id} not found"}
-    )
+@app.post("/auth/login", status_code=200)
+def login(payload: AuthPayload):
+    if not payload.email or not payload.password:
+        raise AuthException(status_code=400, error_message="Missing email or password")
+        
+    try:
+        response = supabase.auth.sign_in_with_password({"email": payload.email, "password": payload.password})
+        if not response or not response.session:
+            raise Exception("Invalid credentials")
+            
+        return {
+            "access_token": response.session.access_token,
+            "refresh_token": response.session.refresh_token
+        }
+    except Exception:
+        raise AuthException(status_code=401, error_message="Invalid login credentials")
+
+@app.post("/auth/logout", status_code=204)
+def logout(request: Request, current_user: dict = Depends(get_current_user)):
+    token = getattr(request.state, "token", None)
+    if token:
+        try:
+            # Authenticate the local client instance to sign out the user session
+            supabase.auth.set_session(access_token=token, refresh_token=token)
+            supabase.auth.sign_out()
+        except Exception:
+            pass
+    return Response(status_code=204)
+
+# Protected Endpoints
+@app.get("/protected/profile", status_code=200)
+def protected_profile(current_user: dict = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "created_at": str(current_user.created_at)
+    }
+
+@app.get("/protected/dashboard", status_code=200)
+def protected_dashboard(current_user: dict = Depends(get_current_user)):
+    return {
+        "message": f"Welcome to your dashboard, {current_user.email}!"
+    }
