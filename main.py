@@ -3,42 +3,59 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
+import sqlite3
+import os
+
+DATABASE = "tasks.db"
 
 app = FastAPI(
     title="To-Do CRUD API",
-    description="A complete, minimal CRUD To-Do API built with FastAPI.",
-    version="1.0.0"
+    description="A complete, minimal SQLite-backed CRUD To-Do API built with FastAPI.",
+    version="2.0.0"
 )
 
-# In-memory tasks database
-tasks_db = [
-    {
-        "id": 1,
-        "title": "Buy groceries",
-        "description": "Buy milk, eggs, bread, and fruits",
-        "completed": False
-    },
-    {
-        "id": 2,
-        "title": "Clean the house",
-        "description": "Vacuum the living room and dust the shelves",
-        "completed": True
-    },
-    {
-        "id": 3,
-        "title": "Learn FastAPI",
-        "description": "Practice building APIs and writing tests",
-        "completed": False
-    }
-]
+# Helper function to get database connection
+def get_db():
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    return conn
 
-# Track next task ID
-next_id = 4
+# Database Initialization
+def init_db():
+    with sqlite3.connect(DATABASE) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                done BOOLEAN NOT NULL DEFAULT 0
+            );
+        """)
+        
+        # Seed only if table is empty
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM tasks;")
+        count = cursor.fetchone()[0]
+        
+        if count == 0:
+            cursor.execute("INSERT INTO tasks (title, done) VALUES ('Buy groceries', 0);")
+            cursor.execute("INSERT INTO tasks (title, done) VALUES ('Clean the house', 1);")
+            cursor.execute("INSERT INTO tasks (title, done) VALUES ('Learn FastAPI', 0);")
+            conn.commit()
+
+# Initialize the database immediately on module load
+init_db()
+
+# Helper to convert Row to dict
+def row_to_task(row) -> dict:
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "done": bool(row["done"])
+    }
 
 # Pydantic Models
 class TaskCreate(BaseModel):
     title: str = Field(..., description="The title of the task (required, non-empty)")
-    description: Optional[str] = Field(None, description="Optional detailed description")
 
     @field_validator("title")
     @classmethod
@@ -49,8 +66,7 @@ class TaskCreate(BaseModel):
 
 class TaskUpdate(BaseModel):
     title: str = Field(..., description="The title of the task (required, non-empty)")
-    description: Optional[str] = Field(None, description="Optional detailed description")
-    completed: bool = Field(..., description="Completion status of the task")
+    done: bool = Field(..., description="Completion status of the task")
 
     @field_validator("title")
     @classmethod
@@ -62,8 +78,7 @@ class TaskUpdate(BaseModel):
 class TaskResponse(BaseModel):
     id: int
     title: str
-    description: Optional[str] = None
-    completed: bool
+    done: bool
 
 # Custom Exception Handler to return HTTP 400 for validation errors
 @app.exception_handler(RequestValidationError)
@@ -112,13 +127,18 @@ def health_check():
 
 @app.get("/tasks", response_model=List[TaskResponse], status_code=status.HTTP_200_OK)
 def get_tasks():
-    return tasks_db
+    with get_db() as conn:
+        cursor = conn.execute("SELECT id, title, done FROM tasks;")
+        rows = cursor.fetchall()
+        return [row_to_task(row) for row in rows]
 
 @app.get("/tasks/{task_id}", response_model=TaskResponse)
 def get_task(task_id: int):
-    for task in tasks_db:
-        if task["id"] == task_id:
-            return task
+    with get_db() as conn:
+        cursor = conn.execute("SELECT id, title, done FROM tasks WHERE id = ?;", (task_id,))
+        row = cursor.fetchone()
+        if row:
+            return row_to_task(row)
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND,
         content={"error": f"Task with ID {task_id} not found"}
@@ -126,37 +146,51 @@ def get_task(task_id: int):
 
 @app.post("/tasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
 def create_task(task_in: TaskCreate):
-    global next_id
-    new_task = {
-        "id": next_id,
-        "title": task_in.title.strip(),
-        "description": task_in.description.strip() if task_in.description else None,
-        "completed": False
-    }
-    tasks_db.append(new_task)
-    next_id += 1
-    return new_task
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO tasks (title, done) VALUES (?, 0);",
+            (task_in.title.strip(),)
+        )
+        new_id = cursor.lastrowid
+        conn.commit()
+        
+        cursor.execute("SELECT id, title, done FROM tasks WHERE id = ?;", (new_id,))
+        row = cursor.fetchone()
+        return row_to_task(row)
 
 @app.put("/tasks/{task_id}", response_model=TaskResponse)
 def update_task(task_id: int, task_in: TaskUpdate):
-    for task in tasks_db:
-        if task["id"] == task_id:
-            task["title"] = task_in.title.strip()
-            task["description"] = task_in.description.strip() if task_in.description else None
-            task["completed"] = task_in.completed
-            return task
-    return JSONResponse(
-        status_code=status.HTTP_404_NOT_FOUND,
-        content={"error": f"Task with ID {task_id} not found"}
-    )
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM tasks WHERE id = ?;", (task_id,))
+        if not cursor.fetchone():
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"error": f"Task with ID {task_id} not found"}
+            )
+        
+        cursor.execute(
+            "UPDATE tasks SET title = ?, done = ? WHERE id = ?;",
+            (task_in.title.strip(), 1 if task_in.done else 0, task_id)
+        )
+        conn.commit()
+        
+        cursor.execute("SELECT id, title, done FROM tasks WHERE id = ?;", (task_id,))
+        row = cursor.fetchone()
+        return row_to_task(row)
 
 @app.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_task(task_id: int):
-    for i, task in enumerate(tasks_db):
-        if task["id"] == task_id:
-            tasks_db.pop(i)
-            return Response(status_code=status.HTTP_204_NO_CONTENT)
-    return JSONResponse(
-        status_code=status.HTTP_404_NOT_FOUND,
-        content={"error": f"Task with ID {task_id} not found"}
-    )
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM tasks WHERE id = ?;", (task_id,))
+        if not cursor.fetchone():
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"error": f"Task with ID {task_id} not found"}
+            )
+        
+        cursor.execute("DELETE FROM tasks WHERE id = ?;", (task_id,))
+        conn.commit()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
