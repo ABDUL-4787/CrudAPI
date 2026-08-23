@@ -122,14 +122,16 @@ class Scraper:
         book_urls = []
         
         for page_num in range(1, 4):
-            safe_print(f"\nScanning Catalogue Page {page_num}: {current_url}...")
+            safe_print(f"\n[Processing Page {page_num}] Scanning catalogue URL: {current_url}")
             html = self.fetch_page(current_url)
             if not html:
+                safe_print(f"Failed to fetch catalogue page {page_num}.")
                 break
                 
             soup = BeautifulSoup(html, "html.parser")
             
             # Find all book article link URLs on the page
+            page_discoveries = 0
             articles = soup.find_all("article", class_="product_pod")
             for article in articles:
                 link = article.find("h3").find("a")
@@ -140,6 +142,9 @@ class Scraper:
                     if abs_url not in book_urls:
                         book_urls.append(abs_url)
                         self.discovered_urls.append(abs_url)
+                    page_discoveries += 1
+            
+            safe_print(f"Page {page_num} processing complete. Discovered {page_discoveries} book URLs on this page.")
             
             # Find the 'next' button
             next_li = soup.find("li", class_="next")
@@ -154,7 +159,7 @@ class Scraper:
                 
         # Dedup list
         unique_urls = list(set(book_urls))
-        safe_print(f"\nDiscovered {len(unique_urls)} unique book URLs across the 3 catalogue pages.")
+        safe_print(f"\nDiscovery complete. Discovered {len(unique_urls)} unique book URLs across the 3 catalogue pages.")
         return unique_urls
 
     def parse_book_details(self, url: str, html: str) -> Optional[BookRecord]:
