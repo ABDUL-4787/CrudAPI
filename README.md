@@ -157,14 +157,18 @@ content-type: application/json
 
 ### Create a Task (`POST /tasks`)
 
-#### Command:
+Creating a task requires a valid JSON payload. A successful creation returns **HTTP 201 Created** along with the created task object. 
+
+If the `title` field is missing, empty, or consists only of whitespace, the API rejects the request with **HTTP 400 Bad Request** and returns a JSON response containing an `"error"` field detailing the validation failure.
+
+#### Example Request (Success):
 ```bash
 curl -i -X POST http://127.0.0.1:8000/tasks \
   -H "Content-Type: application/json" \
   -d '{"title": "Write Unit Tests", "description": "Verify all API endpoints work as expected"}'
 ```
 
-#### Expected Output:
+#### Expected Output (HTTP 201 Created):
 ```http
 HTTP/1.1 201 Created
 date: Sun, 23 Aug 2026 10:25:00 GMT
@@ -175,16 +179,14 @@ content-type: application/json
 {"id":4,"title":"Write Unit Tests","description":"Verify all API endpoints work as expected","completed":false}
 ```
 
-### Invalid Title Example (`POST /tasks` with Empty Title)
-
-#### Command:
+#### Example Request (Missing, Empty, or Whitespace Title):
 ```bash
 curl -i -X POST http://127.0.0.1:8000/tasks \
   -H "Content-Type: application/json" \
   -d '{"title": "   ", "description": "Whitespace title"}'
 ```
 
-#### Expected Output:
+#### Expected Output (HTTP 400 Bad Request):
 ```http
 HTTP/1.1 400 Bad Request
 date: Sun, 23 Aug 2026 10:25:05 GMT
