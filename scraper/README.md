@@ -109,3 +109,14 @@ After a successful execution, the following files are populated in `scraper/outp
 - **`books.json`**: An array containing exactly 60 unique book detail records.
 - **`errors.json`**: Tracks any validation or network failures.
 - **`run-report.json`**: A JSON file containing execution summary statistics.
+
+---
+
+## Verification Results
+The following final checks have been performed and verified locally:
+1. **Exactly 60 Books Collected**: The scraper processes catalogue pagination and saves exactly 60 unique book detail records to `output/books.json`.
+2. **Numeric price_gbp**: The extracted currency string is parsed and stored as a native floating-point numeric value (`price_gbp`) inside the JSON records.
+3. **Caching & Cache Hits**: Re-running the scraper uses local HTML cache files and outputs `CACHE HIT` messages to the terminal, completing the execution in seconds.
+4. **Error & Broken Page Resilience**: Intentionally adding a broken URL returns an HTTP 404 response but does not crash the scraper. 
+5. **Errors Logging**: All skipped or failed URLs (including `robots.txt` and the broken URL) are recorded with their reasons inside `output/errors.json`.
+6. **Files Verification**: Verified that `output/books.json` and `output/run-report.json` are generated successfully with valid formats.
