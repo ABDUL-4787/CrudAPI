@@ -334,7 +334,18 @@ class Scraper:
         report_path = os.path.join(OUTPUT_DIR, "run-report.json")
         with open(report_path, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, ensure_ascii=False)
-        safe_print(f"Saved execution report to {report_path}\n")
+        safe_print(f"Saved execution report to {report_path}")
+        
+        # Output human-readable summary console block
+        safe_print("\n" + "="*50)
+        safe_print("           SCRAPER EXECUTION SUMMARY")
+        safe_print("="*50)
+        safe_print(f"  Successfully Processed:  {report['successfully_processed_records']} books")
+        safe_print(f"  Failed/Skipped Records:  {report['failed_records']} URLs")
+        safe_print(f"  Local Cache Hits:        {report['cache_hits']} hits")
+        safe_print(f"  Live HTTP Fetches:       {report['real_fetches']} fetches")
+        safe_print(f"  Total Duration:          {report['duration_seconds']} seconds")
+        safe_print("="*50 + "\n")
 
 if __name__ == "__main__":
     scraper = Scraper()
