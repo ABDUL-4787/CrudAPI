@@ -251,7 +251,15 @@ class Scraper:
         try:
             return BookRecord(**record_data)
         except ValidationError as val_err:
-            safe_print(f"Validation failure for {url}: {val_err.json()}")
+            error_lines = []
+            for err in val_err.errors():
+                loc_str = " -> ".join(str(loc) for loc in err.get("loc", []))
+                msg = err.get("msg", "Validation error")
+                error_lines.append(f"  - Field '{loc_str}': {msg}")
+            
+            error_summary = "\n".join(error_lines)
+            safe_print(f"\n[VALIDATION FAILED] Book: '{title}' at URL: {url}\n{error_summary}\n")
+            
             self.errors.append({
                 "url": url,
                 "reason": "Pydantic validation error",
