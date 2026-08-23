@@ -196,3 +196,92 @@ content-type: application/json
 
 {"error":"Title must not be empty or whitespace-only."}
 ```
+
+### Update a Task (`PUT /tasks/{id}`)
+
+Updating a task replaces its contents. A successful update returns **HTTP 200 OK** with the updated task object. 
+
+- If the task ID does not exist, it returns **HTTP 404 Not Found** with a JSON response containing an `"error"` field.
+- If the `title` field is empty or whitespace-only, it returns **HTTP 400 Bad Request** with an `"error"` field.
+
+#### Example Request:
+```bash
+curl -i -X PUT http://127.0.0.1:8000/tasks/1 \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Buy fresh groceries", "description": "Milk, eggs, and bread", "completed": true}'
+```
+
+#### Expected Output (HTTP 200 OK):
+```http
+HTTP/1.1 200 OK
+content-type: application/json
+
+{"id":1,"title":"Buy fresh groceries","description":"Milk, eggs, and bread","completed":true}
+```
+
+#### Expected Output for Unknown ID (HTTP 404 Not Found):
+```http
+HTTP/1.1 404 Not Found
+content-type: application/json
+
+{"error":"Task with ID 999 not found"}
+```
+
+### Delete a Task (`DELETE /tasks/{id}`)
+
+Deleting a task removes it from the database. A successful deletion returns **HTTP 204 No Content** with an empty response body.
+
+- If the task ID does not exist, it returns **HTTP 404 Not Found** with a JSON response containing an `"error"` field.
+
+#### Example Request:
+```bash
+curl -i -X DELETE http://127.0.0.1:8000/tasks/1
+```
+
+#### Expected Output (HTTP 204 No Content):
+```http
+HTTP/1.1 204 No Content
+```
+
+#### Expected Output for Unknown ID (HTTP 404 Not Found):
+```http
+HTTP/1.1 404 Not Found
+content-type: application/json
+
+{"error":"Task with ID 999 not found"}
+```
+
+---
+
+## Complete CRUD Flow Example
+
+Here is a quick, complete lifecycle of a task from creation to deletion:
+
+1. **Create** the task:
+   ```bash
+   curl -s -X POST http://127.0.0.1:8000/tasks \
+     -H "Content-Type: application/json" \
+     -d '{"title": "Review PRs"}'
+   ```
+   *Response:* `{"id":4,"title":"Review PRs","description":null,"completed":false}`
+
+2. **Read** the created task:
+   ```bash
+   curl -s http://127.0.0.1:8000/tasks/4
+   ```
+   *Response:* `{"id":4,"title":"Review PRs","description":null,"completed":false}`
+
+3. **Update** the task to completed:
+   ```bash
+   curl -s -X PUT http://127.0.0.1:8000/tasks/4 \
+     -H "Content-Type: application/json" \
+     -d '{"title": "Review PRs", "completed": true}'
+   ```
+   *Response:* `{"id":4,"title":"Review PRs","description":null,"completed":true}`
+
+4. **Delete** the task:
+   ```bash
+   curl -i -X DELETE http://127.0.0.1:8000/tasks/4
+   ```
+   *Response:* `HTTP/1.1 204 No Content` (Empty body)
+
