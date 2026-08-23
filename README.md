@@ -1,56 +1,68 @@
-# SQLite-Backed CRUD To-Do API
+# Dockerized PostgreSQL CRUD To-Do API
 
-A lightweight, complete CRUD (Create, Read, Update, Delete) To-Do API built using Python, FastAPI, and a local SQLite database. It features clean error handling, strict validation, and an interactive Swagger UI.
+A lightweight, complete CRUD (Create, Read, Update, Delete) To-Do API built using Python, FastAPI, and PostgreSQL running in Docker containers. 
 
----
-
-## Why SQLite?
-SQLite was chosen for this project because:
-- **Zero Configuration**: It requires no external server setup, installation, or administration.
-- **Self-Contained**: The entire database is stored in a single cross-platform disk file.
-- **Built-in Python Integration**: Python comes with the `sqlite3` library in its standard library, avoiding external dependency overhead.
-- **Lightweight & Fast**: Perfect for minimal and developer-friendly local setups.
+The API routes and service behavior remain completely unchanged from previous stages, but the backend storage layer has been fully migrated to PostgreSQL, managed via Docker Compose.
 
 ---
 
-## Database Location
-The database is automatically created and stored in the project root directory as a file named:
-`tasks.db`
+## Architecture Overview
+The application consists of two containerized services orchestrated by Docker Compose:
+- **`web`**: The FastAPI application containerized using a lightweight python image.
+- **`db`**: A PostgreSQL 15 database service configured with schema auto-initialization and seeding.
 
 ---
 
-## Installation & Running
+## Database Persistence
+To ensure that data survives container lifecycles, database persistence is handled using a **named Docker Volume** (`pgdata`):
+- The volume maps container directory `/var/lib/postgresql/data` directly to a persistent location on the host machine.
+- Stopping or recreating the containers with `docker compose down` will **not** destroy the database content; your tasks remain safe and persist across container builds and restarts.
+
+---
+
+## Getting Started
 
 ### 1. Prerequisites
-Ensure you have Python 3.8+ installed on your system.
+Ensure you have the following installed on your machine:
+- [Docker](https://www.docker.com/) (Must be started/running before executing commands)
+- [Docker Compose](https://docs.docker.com/compose/)
 
-### 2. Setup Virtual Environment
-Run the following commands in your terminal to set up the virtual environment and install dependencies:
-
-```bash
-# Create the virtual environment
-python -m venv .venv
-
-# Activate the virtual environment
-# On Windows (PowerShell):
-.venv\Scripts\Activate.ps1
-# On Windows (Command Prompt):
-.venv\Scripts\activate.bat
-# On macOS/Linux:
-source .venv/bin/activate
-
-# Install the required packages
-pip install -r requirements.txt
-```
-
-### 3. Start the Server
-Run the FastAPI development server using Uvicorn:
+### 2. Configuration Setup (`.env`)
+Create a local `.env` file from the provided `.env.example` to define configuration settings (note that the `.env` file is excluded from Git tracking for security):
 
 ```bash
-uvicorn main:app --reload
+# Copy env.example to create the local configuration file
+cp .env.example .env
 ```
 
-The database (`tasks.db`) will be automatically initialized and seeded with 3 example tasks if it does not already exist. The API is hosted at: `http://127.0.0.1:8000`
+Open `.env` in an editor and set your password:
+```env
+DB_USER=postgres
+DB_PASSWORD=your_secret_password
+DB_NAME=todo_db
+```
+
+### 3. Launching the Services
+To build the FastAPI application container, download the PostgreSQL service, and start both containers in the background, run:
+
+```bash
+docker compose up --build -d
+```
+
+Once started, the API will be available at:
+- Root: `http://127.0.0.1:8000/`
+- Health: `http://127.0.0.1:8000/health`
+- Swagger UI Documentation: `http://127.0.0.1:8000/docs`
+
+To stop the services, run:
+```bash
+docker compose down
+```
+
+---
+
+## Swagger UI Documentation
+All endpoints can be tested interactively by navigating to [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) and clicking the **Try it out** button on each route.
 
 ---
 
@@ -68,57 +80,32 @@ The database (`tasks.db`) will be automatically initialized and seeded with 3 ex
 
 ---
 
-## Database Schema & Query Example
+## How Persistence is Tested
+To verify that the persistent volume is working correctly and data survives container restarts:
 
-The database table `tasks` is structured as follows:
-```sql
-CREATE TABLE IF NOT EXISTS tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    done BOOLEAN NOT NULL DEFAULT 0
-);
-```
-
-## SQL Queries Explored
-
-Here are some key SQLite queries used and explored in this project:
-
-- **Select all tasks**:
-  ```sql
-  SELECT * FROM tasks;
-  ```
-- **Select completed tasks**:
-  ```sql
-  SELECT * FROM tasks WHERE done = 1;
-  ```
-- **Count the total number of tasks**:
-  ```sql
-  SELECT COUNT(*) FROM tasks;
-  ```
-- **Mark all tasks as completed**:
-  ```sql
-  UPDATE tasks SET done = 1;
-  ```
-- **Delete all completed tasks**:
-  ```sql
-  DELETE FROM tasks WHERE done = 1;
-  ```
-
----
-
-## Database Viewer
-To explore the `tasks.db` database visually, you can use any standard SQLite client (such as DB Browser for SQLite).
-
-_Database Viewer Screenshot Placeholder:_
-![Database Viewer Screenshot Placeholder](https://raw.githubusercontent.com/ABDUL-4787/CrudAPI/main/docs/db_viewer_placeholder.png)
-
----
-
-## Swagger UI Documentation
-
-Swagger UI is available at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs). 
-
-All endpoints can be tested interactively there, allowing you to perform a full CRUD cycle using the "Try it out" button on each endpoint.
+1. **Verify initial tasks** (seeded on start):
+   ```bash
+   curl -i http://127.0.0.1:8000/tasks
+   ```
+2. **Create a new task** (Task ID 4):
+   ```bash
+   curl -i -X POST http://127.0.0.1:8000/tasks \
+     -H "Content-Type: application/json" \
+     -d '{"title": "Docker Persistent Task"}'
+   ```
+3. **Restart the containers**:
+   ```bash
+   # Shut down the services (stops and removes containers, keeping volumes)
+   docker compose down
+   
+   # Restart the services
+   docker compose up -d
+   ```
+4. **Fetch tasks and verify data survival**:
+   ```bash
+   curl -i http://127.0.0.1:8000/tasks
+   ```
+   *Verify that "Docker Persistent Task" (with ID 4) is still present in the returned list.*
 
 ---
 
@@ -135,65 +122,17 @@ content-type: application/json
 {"message":"Welcome to the To-Do CRUD API!"}
 ```
 
-### Health Check Endpoint (`GET /health`)
-```bash
-curl -i http://127.0.0.1:8000/health
-```
-```http
-HTTP/1.1 200 OK
-content-type: application/json
-
-{"status":"ok"}
-```
-
-### Retrieve All Tasks (`GET /tasks`)
-```bash
-curl -i http://127.0.0.1:8000/tasks
-```
-```http
-HTTP/1.1 200 OK
-content-type: application/json
-
-[
-  {"id":1,"title":"Buy groceries","done":false},
-  {"id":2,"title":"Clean the house","done":true},
-  {"id":3,"title":"Learn FastAPI","done":false}
-]
-```
-
-### Retrieve a Single Task (`GET /tasks/{id}`)
-```bash
-curl -i http://127.0.0.1:8000/tasks/1
-```
-```http
-HTTP/1.1 200 OK
-content-type: application/json
-
-{"id":1,"title":"Buy groceries","done":false}
-```
-
-### Task Not Found (`GET /tasks/{id}` with Unknown ID)
-```bash
-curl -i http://127.0.0.1:8000/tasks/999
-```
-```http
-HTTP/1.1 404 Not Found
-content-type: application/json
-
-{"error":"Task with ID 999 not found"}
-```
-
 ### Create a Task (`POST /tasks`)
 ```bash
 curl -i -X POST http://127.0.0.1:8000/tasks \
   -H "Content-Type: application/json" \
-  -d '{"title": "Write Unit Tests"}'
+  -d '{"title": "Write Compose Config"}'
 ```
 ```http
 HTTP/1.1 201 Created
 content-type: application/json
 
-{"id":4,"title":"Write Unit Tests","done":false}
+{"id":4,"title":"Write Compose Config","done":false}
 ```
 
 ### Invalid Title Example (`POST /tasks` with Empty Title)
@@ -208,52 +147,3 @@ content-type: application/json
 
 {"error":"Title must not be empty or whitespace-only."}
 ```
-
-### Update a Task (`PUT /tasks/{id}`)
-```bash
-curl -i -X PUT http://127.0.0.1:8000/tasks/1 \
-  -H "Content-Type: application/json" \
-  -d '{"title": "Buy fresh groceries", "done": true}'
-```
-```http
-HTTP/1.1 200 OK
-content-type: application/json
-
-{"id":1,"title":"Buy fresh groceries","done":true}
-```
-
-### Delete a Task (`DELETE /tasks/{id}`)
-```bash
-curl -i -X DELETE http://127.0.0.1:8000/tasks/1
-```
-```http
-HTTP/1.1 204 No Content
-```
-
----
-
-## Complete CRUD Flow Example
-
-1. **Create** the task:
-   ```bash
-   curl -s -X POST http://127.0.0.1:8000/tasks -H "Content-Type: application/json" -d '{"title": "Review PRs"}'
-   ```
-   *Response:* `{"id":4,"title":"Review PRs","done":false}`
-
-2. **Read** the created task:
-   ```bash
-   curl -s http://127.0.0.1:8000/tasks/4
-   ```
-   *Response:* `{"id":4,"title":"Review PRs","done":false}`
-
-3. **Update** the task to done:
-   ```bash
-   curl -s -X PUT http://127.0.0.1:8000/tasks/4 -H "Content-Type: application/json" -d '{"title": "Review PRs", "done": true}'
-   ```
-   *Response:* `{"id":4,"title":"Review PRs","done":true}`
-
-4. **Delete** the task:
-   ```bash
-   curl -i -X DELETE http://127.0.0.1:8000/tasks/4
-   ```
-   *Response:* `HTTP/1.1 204 No Content` (Empty body)

@@ -18,3 +18,7 @@ htmlcov/
 .vscode/
 *.swp
 *.swo
+
+# Environment Variables
+.env
+
