@@ -174,7 +174,7 @@ def update_task(task_id: int, task_in: TaskUpdate):
         
         cursor.execute(
             "UPDATE tasks SET title = ?, done = ? WHERE id = ?;",
-            (task_in.title.strip(), 1 if task_in.done else 0, task_id)
+            (task_in.title.strip(), task_in.done, task_id)
         )
         conn.commit()
         
