@@ -67,10 +67,9 @@ The API will be available at: `http://127.0.0.1:8000`
 
 ## Swagger UI Documentation
 
-FastAPI provides interactive Swagger UI documentation at:
-- [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+Swagger UI is available at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs). 
 
-You can use the **Try it out** button in the Swagger UI to test the CRUD cycle (GET, POST, PUT, DELETE) directly from your browser.
+All endpoints can be tested interactively there, allowing you to perform a full CRUD cycle using the "Try it out" button on each endpoint.
 
 ---
 
