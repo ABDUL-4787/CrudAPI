@@ -1,0 +1,5 @@
+# Local caching folder
+cache/
+
+# Local extraction reports and outputs
+output/
