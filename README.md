@@ -107,8 +107,9 @@ Here are some key SQLite queries used and explored in this project:
 ---
 
 ## Database Viewer
-_Below is a placeholder for a database viewer screenshot showing the seeded tasks in `tasks.db`:_
+To explore the `tasks.db` database visually, you can use any standard SQLite client (such as DB Browser for SQLite).
 
+_Database Viewer Screenshot Placeholder:_
 ![Database Viewer Screenshot Placeholder](https://raw.githubusercontent.com/ABDUL-4787/CrudAPI/main/docs/db_viewer_placeholder.png)
 
 ---
