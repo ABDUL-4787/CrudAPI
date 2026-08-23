@@ -128,14 +128,16 @@ def health_check():
 @app.get("/tasks", response_model=List[TaskResponse], status_code=status.HTTP_200_OK)
 def get_tasks():
     with get_db() as conn:
-        cursor = conn.execute("SELECT id, title, done FROM tasks;")
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, title, done FROM tasks;")
         rows = cursor.fetchall()
         return [row_to_task(row) for row in rows]
 
 @app.get("/tasks/{task_id}", response_model=TaskResponse)
 def get_task(task_id: int):
     with get_db() as conn:
-        cursor = conn.execute("SELECT id, title, done FROM tasks WHERE id = ?;", (task_id,))
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, title, done FROM tasks WHERE id = ?;", (task_id,))
         row = cursor.fetchone()
         if row:
             return row_to_task(row)
