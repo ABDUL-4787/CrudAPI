@@ -76,6 +76,36 @@ You can use the **Try it out** button in the Swagger UI to test the CRUD cycle (
 
 ## Example Usage
 
+### Root Endpoint (`GET /`)
+
+#### Command:
+```bash
+curl -i http://127.0.0.1:8000/
+```
+
+#### Expected Output:
+```http
+HTTP/1.1 200 OK
+content-type: application/json
+
+{"message":"Welcome to the To-Do CRUD API!"}
+```
+
+### Health Check Endpoint (`GET /health`)
+
+#### Command:
+```bash
+curl -i http://127.0.0.1:8000/health
+```
+
+#### Expected Output:
+```http
+HTTP/1.1 200 OK
+content-type: application/json
+
+{"status":"ok"}
+```
+
 ### Create a Task (`POST /tasks`)
 
 #### Command:
